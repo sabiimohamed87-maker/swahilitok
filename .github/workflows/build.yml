@@ -1,4 +1,3 @@
-
 name: Build AAB
 on:
   push:
@@ -16,14 +15,25 @@ jobs:
         with:
           channel: 'stable'
           cache: true
-      - run: flutter create --platforms=android .
       - run: flutter pub get
       - run: |
-          keytool -genkey -v -keystore android/app/upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload -storepass 123456 -keypass 123456 -dname "CN=SwahiliTok, OU=App, O=SwahiliTok, L=Muscat, ST=Muscat, C=OM"
+          keytool -genkey -v -keystore android/app/upload-keystore.jks -alias upload -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=SwahiliTok, OU=Dev, O=SwahiliTok, L=Dar, ST=Dar, C=TZ"
           echo "storePassword=123456" > android/key.properties
           echo "keyPassword=123456" >> android/key.properties
           echo "keyAlias=upload" >> android/key.properties
           echo "storeFile=upload-keystore.jks" >> android/key.properties
+      - run: |
+          python3 -c "
+          import pathlib
+          p = pathlib.Path('android/app/build.gradle.kts')
+          t = p.read_text()
+          if 'signingConfigs' not in t:
+              t = t.replace('buildTypes {', '''signingConfigs { create(\"release\") { keyAlias = \"upload\"; keyPassword = \"123456\"; storeFile = file(\"upload-keystore.jks\"); storePassword = \"123456\" } }
+              buildTypes {''')
+              t = t.replace('release {', 'release { signingConfig = signingConfigs.getByName(\"release\")')
+              p.write_text(t)
+          print('patched')
+          "
       - run: flutter build appbundle --release
       - uses: actions/upload-artifact@v4
         with:
