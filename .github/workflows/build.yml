@@ -13,33 +13,10 @@ jobs:
           java-version: '17'
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.19.6'
           channel: 'stable'
           cache: true
       - run: flutter pub get
-      - run: |
-          python3 -c "
-          import pathlib, re
-          # 1. Fix AndroidManifest - v1 -> v2
-          m = pathlib.Path('android/app/src/main/AndroidManifest.xml')
-          if m.exists():
-              t = m.read_text()
-              t = t.replace('android:value=\"1\"', 'android:value=\"2\"')
-              t = re.sub(r'<meta-data[^>]*flutterEmbedding[^>]*>', '', t)
-              # remove old FlutterApplication
-              t = t.replace('android:name=\"io.flutter.app.FlutterApplication\"', 'android:name=\"\${applicationName}\"')
-              m.write_text(t)
-              print('fixed manifest')
-          # 2. Fix MainActivity
-          for p in pathlib.Path('android/app/src').rglob('MainActivity.*'):
-              t = p.read_text()
-              t = t.replace('io.flutter.app.FlutterActivity', 'io.flutter.embedding.android.FlutterActivity')
-              t = t.replace('io.flutter.app.FlutterFragmentActivity', 'io.flutter.embedding.android.FlutterFragmentActivity')
-              # remove old GeneratedPluginRegistrant import if needed
-              if 'GeneratedPluginRegistrant' in t and 'onCreate' not in t:
-                  pass
-              p.write_text(t)
-              print('fixed', p)
-          "
       - run: |
           mkdir -p android/app
           rm -f android/app/upload-keystore.jks
