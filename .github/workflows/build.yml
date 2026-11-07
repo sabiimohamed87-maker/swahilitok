@@ -16,8 +16,14 @@ jobs:
         with:
           channel: 'stable'
           cache: true
-      - run: flutter create --platforms android --project-name swahilitok --org com.swahilitok.app .
+      - run: flutter create --platforms=android .
       - run: flutter pub get
+      - run: |
+          keytool -genkey -v -keystore android/app/upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload -storepass 123456 -keypass 123456 -dname "CN=SwahiliTok, OU=App, O=SwahiliTok, L=Muscat, ST=Muscat, C=OM"
+          echo "storePassword=123456" > android/key.properties
+          echo "keyPassword=123456" >> android/key.properties
+          echo "keyAlias=upload" >> android/key.properties
+          echo "storeFile=upload-keystore.jks" >> android/key.properties
       - run: flutter build appbundle --release
       - uses: actions/upload-artifact@v4
         with:
