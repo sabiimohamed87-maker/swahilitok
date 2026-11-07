@@ -18,6 +18,72 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: |
+          echo "=== FIND MANIFESTS ==="
+          find android -name "AndroidManifest.xml" 2>/dev/null || echo "none found"
+          ls -R android | head -n 100
+      - run: |
+          python3 -c "
+          import pathlib, re, shutil
+          # Tafuta manifest yoyote iliyopo
+          manifests = list(pathlib.Path('android').rglob('AndroidManifest.xml'))
+          print('found:', manifests)
+          src = None
+          if manifests:
+              src = manifests[0]
+              print(src.read_text()[:2000])
+          # Kama hakuna, tumia default
+          if not src:
+              pathlib.Path('android/app/src/main').mkdir(parents=True, exist_ok=True)
+              # Jaribu kupata package name kutoka kwa MainActivity au build.gradle
+              pkg = 'com.example.swahilitok'
+              for p in pathlib.Path('android').rglob('*.gradle*'):
+                  t = p.read_text(errors='ignore')
+                  m = re.search(r'applicationId\s+[\"\\']([^\"\\']+)', t)
+                  if m:
+                      pkg = m.group(1)
+                      break
+              print('using package', pkg)
+              content = f'''<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" package=\"{pkg}\">
+          <application android:label=\"SwahiliTok\" android:name=\"\${{applicationName}}\" android:icon=\"@mipmap/ic_launcher\">
+              <activity android:name=\".MainActivity\" android:exported=\"true\" android:launchMode=\"singleTop\" android:theme=\"@style/LaunchTheme\" android:configChanges=\"orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode\" android:hardwareAccelerated=\"true\" android:windowSoftInputMode=\"adjustResize\">
+                  <meta-data android:name=\"io.flutter.embedding.android.NormalTheme\" android:resource=\"@style/NormalTheme\" />
+                  <intent-filter>
+                      <action android:name=\"android.intent.action.MAIN\" />
+                      <category android:name=\"android.intent.category.LAUNCHER\" />
+                  </intent-filter>
+              </activity>
+              <meta-data android:name=\"flutterEmbedding\" android:value=\"2\" />
+          </application>
+          </manifest>'''
+              pathlib.Path('android/app/src/main/AndroidManifest.xml').write_text(content)
+              src = pathlib.Path('android/app/src/main/AndroidManifest.xml')
+          # Sasa hakikisha manifest zote ni v2
+          for m in pathlib.Path('android').rglob('AndroidManifest.xml'):
+              t = m.read_text()
+              t = t.replace('android:value=\"1\"', 'android:value=\"2\"')
+              # Ondoa meta-data ya zamani ya flutterEmbedding kama ipo mara mbili
+              # Weka flutterEmbedding = 2 kama haipo
+              if 'flutterEmbedding' not in t:
+                  t = t.replace('</application>', '<meta-data android:name=\"flutterEmbedding\" android:value=\"2\" /></application>')
+              # Badilisha FlutterApplication ya zamani
+              t = t.replace('android:name=\"io.flutter.app.FlutterApplication\"', 'android:name=\"\${applicationName}\"')
+              m.write_text(t)
+              print('fixed', m)
+          # Unda nakala ambayo Flutter 3.19 inaitafuta: android/AndroidManifest.xml
+          app_manifest = pathlib.Path('android/app/src/main/AndroidManifest.xml')
+          if app_manifest.exists():
+              shutil.copy(app_manifest, pathlib.Path('android/AndroidManifest.xml'))
+              print('copied to android/AndroidManifest.xml')
+          # Fix MainActivity zote
+          for p in list(pathlib.Path('android').rglob('MainActivity.*')):
+              t = p.read_text(errors='ignore')
+              t = t.replace('io.flutter.app.FlutterActivity', 'io.flutter.embedding.android.FlutterActivity')
+              t = t.replace('io.flutter.app.FlutterFragmentActivity', 'io.flutter.embedding.android.FlutterFragmentActivity')
+              t = t.replace('io.flutter.app.FlutterApplication', 'io.flutter.app.FlutterApplication')
+              p.write_text(t)
+              print('fixed activity', p)
+          "
+      - run: |
           mkdir -p android/app
           rm -f android/app/upload-keystore.jks
           keytool -genkeypair -v -keystore android/app/upload-keystore.jks -alias upload -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=SwahiliTok, OU=Dev, O=SwahiliTok, L=Dar, ST=Dar, C=TZ" -noprompt
