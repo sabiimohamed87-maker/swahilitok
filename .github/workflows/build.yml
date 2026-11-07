@@ -20,22 +20,26 @@ jobs:
           mkdir -p android/app
           rm -f android/app/upload-keystore.jks
           keytool -genkeypair -v -keystore android/app/upload-keystore.jks -alias upload -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=SwahiliTok, OU=Dev, O=SwahiliTok, L=Dar, ST=Dar, C=TZ" -noprompt
-          echo "storePassword=123456" > android/key.properties
-          echo "keyPassword=123456" >> android/key.properties
-          echo "keyAlias=upload" >> android/key.properties
-          echo "storeFile=upload-keystore.jks" >> android/key.properties
           ls -lh android/app/upload-keystore.jks
       - run: |
           python3 -c "
           import pathlib
-          p = pathlib.Path('android/app/build.gradle.kts')
-          t = p.read_text()
-          if 'signingConfigs' not in t:
-              t = t.replace('buildTypes {', '''signingConfigs { create(\"release\") { keyAlias = \"upload\"; keyPassword = \"123456\"; storeFile = file(\"upload-keystore.jks\"); storePassword = \"123456\" } }
-              buildTypes {''')
-              t = t.replace('release {', 'release { signingConfig = signingConfigs.getByName(\"release\")')
+          for name in ['android/app/build.gradle.kts', 'android/app/build.gradle']:
+              p = pathlib.Path(name)
+              if not p.exists():
+                  continue
+              t = p.read_text()
+              if 'signingConfigs' in t:
+                  print('already patched', name)
+                  continue
+              if name.endswith('.kts'):
+                  t = t.replace('buildTypes {', 'signingConfigs { create(\"release\") { keyAlias = \"upload\"; keyPassword = \"123456\"; storeFile = file(\"upload-keystore.jks\"); storePassword = \"123456\" } }\n            buildTypes {')
+                  t = t.replace('release {', 'release { signingConfig = signingConfigs.getByName(\"release\")')
+              else:
+                  t = t.replace('buildTypes {', 'signingConfigs { release { keyAlias \"upload\"; keyPassword \"123456\"; storeFile file(\"upload-keystore.jks\"); storePassword \"123456\" } }\n        buildTypes {')
+                  t = t.replace('release {', 'release { signingConfig signingConfigs.release')
               p.write_text(t)
-          print('patched')
+              print('patched', name)
           "
       - run: flutter build appbundle --release
       - uses: actions/upload-artifact@v4
