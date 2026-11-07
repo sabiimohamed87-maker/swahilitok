@@ -18,45 +18,30 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: |
-          python3 << 'PYEOF'
-          import pathlib, re, shutil
-          # Tafuta package name
-          pkg = 'com.example.swahilitok'
-          for p in pathlib.Path('android').rglob('*.gradle*'):
-              try:
-                  t = p.read_text(errors='ignore')
-                  m = re.search(r'applicationId\s+["\']([^"\']+)', t)
-                  if m:
-                      pkg = m.group(1)
-                      break
-              except:
-                  pass
-          print('package:', pkg)
-          dollar = chr(36)
-          app_name = dollar + '{applicationName}'
-          content = '<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="' + pkg + '">\n'
-          content += '  <application android:label="SwahiliTok" android:name="' + app_name + '" android:icon="@mipmap/ic_launcher">\n'
-          content += '    <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop" android:theme="@style/LaunchTheme" android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode" android:hardwareAccelerated="true" android:windowSoftInputMode="adjustResize">\n'
-          content += '      <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme" />\n'
-          content += '      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>\n'
-          content += '    </activity>\n'
-          content += '    <meta-data android:name="flutterEmbedding" android:value="2" />\n'
-          content += '  </application>\n</manifest>\n'
-          pathlib.Path('android/app/src/main').mkdir(parents=True, exist_ok=True)
-          pathlib.Path('android/app/src/main/AndroidManifest.xml').write_text(content)
-          shutil.copy('android/app/src/main/AndroidManifest.xml', 'android/AndroidManifest.xml')
-          print('manifest fixed')
-          # Fix MainActivity
-          for p in pathlib.Path('android').rglob('MainActivity.*'):
-              try:
-                  t = p.read_text(errors='ignore')
-                  t = t.replace('io.flutter.app.FlutterActivity', 'io.flutter.embedding.android.FlutterActivity')
-                  t = t.replace('io.flutter.app.FlutterFragmentActivity', 'io.flutter.embedding.android.FlutterFragmentActivity')
-                  p.write_text(t)
-                  print('fixed', p)
-              except:
-                  pass
-          PYEOF
+          # Hifadhi code yako
+          cp -r lib /tmp/lib_backup
+          cp pubspec.yaml /tmp/pubspec_backup.yaml
+          if [ -d assets ]; then cp -r assets /tmp/assets_backup; fi
+          # Tafuta package name ya zamani
+          PKG=$(grep -r "applicationId" android/app/build.gradle* 2>/dev/null | head -1 | sed -E 's/.*["'\'']([^"'\'']+)["'\''].*/\1/')
+          if [ -z "$PKG" ]; then PKG="com.example.swahilitok"; fi
+          echo "OLD PKG=$PKG" > /tmp/pkg.txt
+          cat /tmp/pkg.txt
+          # Futa android ya zamani kabisa
+          rm -rf android
+          # Tengeneza android mpya safi
+          flutter create --project-name=swahilitok --org=com.example --platforms=android .
+          # Rudisha code yako
+          rm -rf lib
+          cp -r /tmp/lib_backup lib
+          cp /tmp/pubspec_backup.yaml pubspec.yaml
+          if [ -d /tmp/assets_backup ]; then rm -rf assets; cp -r /tmp/assets_backup assets; fi
+          # Weka package name ya zamani kama ilikuwepo
+          OLD_PKG=$(cat /tmp/pkg.txt | cut -d= -f2)
+          echo "Restoring package $OLD_PKG"
+          sed -i "s/applicationId.*/applicationId \"$OLD_PKG\"/" android/app/build.gradle || true
+          sed -i "s/namespace.*/namespace \"$OLD_PKG\"/" android/app/build.gradle || true
+          flutter pub get
       - run: |
           mkdir -p android/app
           rm -f android/app/upload-keystore.jks
