@@ -17,11 +17,14 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: |
-          keytool -genkey -v -keystore android/app/upload-keystore.jks -alias upload -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=SwahiliTok, OU=Dev, O=SwahiliTok, L=Dar, ST=Dar, C=TZ"
+          mkdir -p android/app
+          rm -f android/app/upload-keystore.jks
+          keytool -genkeypair -v -keystore android/app/upload-keystore.jks -alias upload -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=SwahiliTok, OU=Dev, O=SwahiliTok, L=Dar, ST=Dar, C=TZ" -noprompt
           echo "storePassword=123456" > android/key.properties
           echo "keyPassword=123456" >> android/key.properties
           echo "keyAlias=upload" >> android/key.properties
           echo "storeFile=upload-keystore.jks" >> android/key.properties
+          ls -lh android/app/upload-keystore.jks
       - run: |
           python3 -c "
           import pathlib
