@@ -1,4 +1,4 @@
-name: Build APK
+name: Build AAB
 on:
   push:
     branches: [ main ]
@@ -15,48 +15,7 @@ jobs:
         with:
           flutter-version: '3.19.6'
           channel: 'stable'
-          cache: true
       - run: flutter pub get
-      - run: |
-          cp -r lib /tmp/lib_backup
-          cp pubspec.yaml /tmp/pubspec_backup.yaml
-          if [ -d assets ]; then cp -r assets /tmp/assets_backup; fi
-          python3 << 'PYEOF'
-          import re, pathlib
-          pkg = "com.example.swahilitok"
-          for f in [pathlib.Path("android/app/build.gradle"), pathlib.Path("android/app/build.gradle.kts")]:
-              if f.exists():
-                  m = re.search(r'applicationId\s*["\']?([a-zA-Z0-9_.]+)', f.read_text())
-                  if m:
-                      pkg = m.group(1)
-                      break
-          pathlib.Path("/tmp/pkg.txt").write_text(pkg)
-          print("OLD_PKG=" + pkg)
-          PYEOF
-          rm -rf android
-          flutter create --project-name=swahilitok --org=com.example --platforms=android .
-          rm -rf lib
-          cp -r /tmp/lib_backup lib
-          cp /tmp/pubspec_backup.yaml pubspec.yaml
-          if [ -d /tmp/assets_backup ]; then cp -r /tmp/assets_backup assets; fi
-          python3 << 'PYEOF'
-          import pathlib, re
-          pkg = pathlib.Path("/tmp/pkg.txt").read_text().strip()
-          print("Restoring " + pkg)
-          for name in ["android/app/build.gradle", "android/app/build.gradle.kts"]:
-              p = pathlib.Path(name)
-              if not p.exists():
-                  continue
-              t = p.read_text()
-              t = re.sub(r'applicationId\s*=?\s*["\'][^"\']+["\']', 'applicationId "' + pkg + '"', t)
-              t = re.sub(r'namespace\s*=?\s*["\'][^"\']+["\']', 'namespace "' + pkg + '"', t)
-              p.write_text(t)
-          PYEOF
-          flutter pub get
-      - run: |
-          mkdir -p android/app
-          rm -f android/app/upload-keystore.jks
-          keytool -genkeypair -v -keystore android/app/upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload -storepass android -keypass android -dname "CN=SwahiliTok, OU=Dev, O=SwahiliTok, L=Dar, ST=Dar, C=TZ"
       - run: |
           python3 << 'PYEOF'
           import pathlib
@@ -68,16 +27,16 @@ jobs:
               if 'signingConfigs' in t:
                   continue
               if name.endswith('.kts'):
-                  t = t.replace('buildTypes {', 'signingConfigs { create("release") { storeFile = file("upload-keystore.jks"); storePassword = "android"; keyAlias = "upload"; keyPassword = "android" } }\n    buildTypes {')
-                  t = t.replace('release {', 'release { signingConfig = signingConfigs.getByName("release")')
+                  t = t.replace('buildTypes {', 'buildTypes {\n        release {\n            signingConfig = signingConfigs.getByName("debug")\n        }')
+                  t = t.replace('release {', 'release {')
               else:
-                  t = t.replace('buildTypes {', 'signingConfigs { release { storeFile file("upload-keystore.jks"); storePassword "android"; keyAlias "upload"; keyPassword "android" } }\n    buildTypes {')
-                  t = t.replace('release {', 'release { signingConfig signingConfigs.release')
+                  t = t.replace('buildTypes {', 'buildTypes {\n        release {\n            signingConfig signingConfigs.debug\n        }')
+                  t = t.replace('release {', 'release {')
               p.write_text(t)
               print('patched', name)
           PYEOF
-      - run: flutter build apk --release
+      - run: flutter build appbundle --release
       - uses: actions/upload-artifact@v4
         with:
           name: app-release
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/bundle/release/app-release.aab
