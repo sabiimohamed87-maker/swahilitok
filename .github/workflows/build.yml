@@ -1,4 +1,4 @@
-name: # retry 13 AAB
+name: Build APK
 on:
   push:
     branches: [ main ]
@@ -23,9 +23,9 @@ jobs:
           cp pubspec.yaml /tmp/pubspec_backup.yaml
           if [ -d assets ]; then cp -r assets /tmp/assets_backup; fi
           # Tafuta package name ya zamani
-          PKG=$(grep -r "applicationId" android/app/build.gradle* 2>/dev/null | head -1 | sed -E 's/.*["'\'']([^"'\'']+)["'\''].*/\1/')
+          PKG=$(grep -r "applicationId" android/app/build.gradle* 2>/dev/null | head -1 | sed 's/.*applicationId.*["'\'']\(.*\)["'\''].*/\1/' | tr -d '"'"' ')
           if [ -z "$PKG" ]; then PKG="com.example.swahilitok"; fi
-          echo "OLD PKG=$PKG" > /tmp/pkg.txt
+          echo "OLD_PKG=$PKG" > /tmp/pkg.txt
           cat /tmp/pkg.txt
           # Futa android ya zamani kabisa
           rm -rf android
@@ -35,38 +35,25 @@ jobs:
           rm -rf lib
           cp -r /tmp/lib_backup lib
           cp /tmp/pubspec_backup.yaml pubspec.yaml
-          if [ -d /tmp/assets_backup ]; then rm -rf assets; cp -r /tmp/assets_backup assets; fi
-          # Weka package name ya zamani kama ilikuwepo
+          if [ -d /tmp/assets_backup ]; then cp -r /tmp/assets_backup assets; fi
+          # Weka package name ya zamani
           OLD_PKG=$(cat /tmp/pkg.txt | cut -d= -f2)
           echo "Restoring package $OLD_PKG"
-          sed -i "s/applicationId.*/applicationId \"$OLD_PKG\"/" android/app/build.gradle || true
-          sed -i "s/namespace.*/namespace \"$OLD_PKG\"/" android/app/build.gradle || true
+          sed -i "s/applicationId.*/applicationId \"$OLD_PKG\"/" android/app/build.gradle.kts 2>/dev/null || true
+          sed -i "s/applicationId.*/applicationId \"$OLD_PKG\"/" android/app/build.gradle 2>/dev/null || true
+          sed -i "s/namespace.*/namespace \"$OLD_PKG\"/" android/app/build.gradle.kts 2>/dev/null || true
+          sed -i "s/namespace.*/namespace \"$OLD_PKG\"/" android/app/build.gradle 2>/dev/null || true
           flutter pub get
       - run: |
           mkdir -p android/app
           rm -f android/app/upload-keystore.jks
-          keytool -genkeypair -v -keystore android/app/upload-keystore.jks -alias upload -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=SwahiliTok, OU=Dev, O=SwahiliTok, L=Dar, ST=Dar, C=TZ" -noprompt
+          keytool -genkeypair -v -keystore android/app/upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload -storepass android -keypass android -d "CN=SwahiliTok, OU=Dev, O=SwahiliTok, L=Dar, ST=Dar, C=TZ"
       - run: |
           python3 << 'PYEOF'
           import pathlib
-          for name in ['android/app/build.gradle.kts', 'android/app/build.gradle']:
+          for name in ['android/app/build.gradle', 'android/app/build.gradle.kts']:
               p = pathlib.Path(name)
               if not p.exists():
                   continue
               t = p.read_text()
-              if 'signingConfigs' in t:
-                  continue
-              if name.endswith('.kts'):
-                  t = t.replace('buildTypes {', 'signingConfigs { create("release") { keyAlias = "upload"; keyPassword = "123456"; storeFile = file("upload-keystore.jks"); storePassword = "123456" } }\n            buildTypes {')
-                  t = t.replace('release {', 'release { signingConfig = signingConfigs.getByName("release")')
-              else:
-                  t = t.replace('buildTypes {', 'signingConfigs { release { keyAlias "upload"; keyPassword "123456"; storeFile file("upload-keystore.jks"); storePassword "123456" } }\n        buildTypes {')
-                  t = t.replace('release {', 'release { signingConfig signingConfigs.release')
-              p.write_text(t)
-              print('patched', name)
-          PYEOF
-      - run: flutter build appbundle --release
-      - uses: actions/upload-artifact@v4
-        with:
-          name: app-release
-          path: build/app/outputs/bundle/release/app-release.aab
+             
