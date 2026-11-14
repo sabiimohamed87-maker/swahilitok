@@ -18,31 +18,40 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: |
-          # Hifadhi code yako
           cp -r lib /tmp/lib_backup
           cp pubspec.yaml /tmp/pubspec_backup.yaml
           if [ -d assets ]; then cp -r assets /tmp/assets_backup; fi
-          # Tafuta package name ya zamani
-          PKG=$(grep -r "applicationId" android/app/build.gradle* 2>/dev/null | head -1 | sed 's/.*applicationId.*["'\'']\(.*\)["'\''].*/\1/' | tr -d '"'"' ')
-          if [ -z "$PKG" ]; then PKG="com.example.swahilitok"; fi
-          echo "OLD_PKG=$PKG" > /tmp/pkg.txt
-          cat /tmp/pkg.txt
-          # Futa android ya zamani kabisa
+          python3 << 'PYEOF'
+          import re, pathlib
+          pkg = "com.example.swahilitok"
+          for f in [pathlib.Path("android/app/build.gradle"), pathlib.Path("android/app/build.gradle.kts")]:
+              if f.exists():
+                  m = re.search(r'applicationId\s*["\']?([a-zA-Z0-9_.]+)', f.read_text())
+                  if m:
+                      pkg = m.group(1)
+                      break
+          pathlib.Path("/tmp/pkg.txt").write_text(pkg)
+          print("OLD_PKG=" + pkg)
+          PYEOF
           rm -rf android
-          # Tengeneza android mpya safi
           flutter create --project-name=swahilitok --org=com.example --platforms=android .
-          # Rudisha code yako
           rm -rf lib
           cp -r /tmp/lib_backup lib
           cp /tmp/pubspec_backup.yaml pubspec.yaml
           if [ -d /tmp/assets_backup ]; then cp -r /tmp/assets_backup assets; fi
-          # Weka package name ya zamani
-          OLD_PKG=$(cat /tmp/pkg.txt | cut -d= -f2)
-          echo "Restoring package $OLD_PKG"
-          sed -i "s/applicationId.*/applicationId \"$OLD_PKG\"/" android/app/build.gradle.kts 2>/dev/null || true
-          sed -i "s/applicationId.*/applicationId \"$OLD_PKG\"/" android/app/build.gradle 2>/dev/null || true
-          sed -i "s/namespace.*/namespace \"$OLD_PKG\"/" android/app/build.gradle.kts 2>/dev/null || true
-          sed -i "s/namespace.*/namespace \"$OLD_PKG\"/" android/app/build.gradle 2>/dev/null || true
+          python3 << 'PYEOF'
+          import pathlib, re
+          pkg = pathlib.Path("/tmp/pkg.txt").read_text().strip()
+          print("Restoring " + pkg)
+          for name in ["android/app/build.gradle", "android/app/build.gradle.kts"]:
+              p = pathlib.Path(name)
+              if not p.exists():
+                  continue
+              t = p.read_text()
+              t = re.sub(r'applicationId\s*=?\s*["\'][^"\']+["\']', 'applicationId "' + pkg + '"', t)
+              t = re.sub(r'namespace\s*=?\s*["\'][^"\']+["\']', 'namespace "' + pkg + '"', t)
+              p.write_text(t)
+          PYEOF
           flutter pub get
       - run: |
           mkdir -p android/app
@@ -56,4 +65,19 @@ jobs:
               if not p.exists():
                   continue
               t = p.read_text()
-             
+              if 'signingConfigs' in t:
+                  continue
+              if name.endswith('.kts'):
+                  t = t.replace('buildTypes {', 'signingConfigs { create("release") { storeFile = file("upload-keystore.jks"); storePassword = "android"; keyAlias = "upload"; keyPassword = "android" } }\n    buildTypes {')
+                  t = t.replace('release {', 'release { signingConfig = signingConfigs.getByName("release")')
+              else:
+                  t = t.replace('buildTypes {', 'signingConfigs { release { storeFile file("upload-keystore.jks"); storePassword "android"; keyAlias "upload"; keyPassword "android" } }\n    buildTypes {')
+                  t = t.replace('release {', 'release { signingConfig signingConfigs.release')
+              p.write_text(t)
+              print('patched', name)
+          PYEOF
+      - run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: build/app/outputs/flutter-apk/app-release.apk
