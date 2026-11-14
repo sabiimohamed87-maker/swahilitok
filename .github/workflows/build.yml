@@ -56,7 +56,7 @@ jobs:
       - run: |
           mkdir -p android/app
           rm -f android/app/upload-keystore.jks
-          keytool -genkeypair -v -keystore android/app/upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload -storepass android -keypass android -d "CN=SwahiliTok, OU=Dev, O=SwahiliTok, L=Dar, ST=Dar, C=TZ"
+          keytool -genkeypair -v -keystore android/app/upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload -storepass android -keypass android -dname "CN=SwahiliTok, OU=Dev, O=SwahiliTok, L=Dar, ST=Dar, C=TZ"
       - run: |
           python3 << 'PYEOF'
           import pathlib
